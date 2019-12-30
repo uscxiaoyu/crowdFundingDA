@@ -2,7 +2,7 @@
 '''
 author: Yu Xiao
 Date: 2019/12/27
-Function: 转换mongoDB数据为格式化数据
+Function: 转换mongoDB数据为结构化数据
 '''
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -13,12 +13,15 @@ from bson import ObjectId
 from pymongo import MongoClient
 from scipy.optimize import minimize
 
+DIFFUSION_COLNAMES = ("星期", "关注数", "支持者数", "点赞数", "完成百分比", "筹集金额")
+REVIEW_COLNAMES = ('createTime', 'topicId', 'nicknameShow', 'topicContent', 'likeCount', 'replys')
 
-class ItemDiffusion:
-    def __init__(self, proj, diffu_col_names, front_page):
+class ProjData:
+    def __init__(self, proj, front_page, diffu_col_names=DIFFUSION_COLNAMES, review_col_names=REVIEW_COLNAMES):
         self.proj = proj
         self.front_page = front_page
         self.diffu_col_names = diffu_col_names
+        self.review_col_names = review_col_names
         try:
             self.id = self.proj["_id"]
             self.name = self.proj["项目名称"]
@@ -30,7 +33,10 @@ class ItemDiffusion:
             self.company_phone = self.proj["公司电话"]
             self.link = self.proj["发起人链接"]
             self.category = self.proj["所属类别"]
-
+            self.review = self.proj['评论']
+            self.num_review = self.proj['评论']['总评论数']
+            
+            self.review_df = self.get_review_data()  # 评论数据
             self.pure_diffu_df = self.get_pure_diffu()  # 未处理的扩散数据
             self.front_df = self.get_front_position()  # 首页数据
             self.diffu_df = self.merge_diffu_position()
@@ -38,6 +44,25 @@ class ItemDiffusion:
             self.cum_diffu_df = self.prepare_data()  # 索引为相对众筹开始时间点的间隔
         except Exception as e:
             print(e)
+
+    def get_review_data(self):
+        '''
+        获取评论数据
+        '''
+        raw_review = self.review['评论详细']
+        indices = []
+        values = []
+        for t_id in raw_review:
+            value = []
+            for key in self.review_col_names:
+                if key == 'createTime':
+                    indices.append(raw_review[t_id][key])
+                else:
+                    value.append(raw_review[t_id][key])
+                
+            values.append(value)
+        columns = self.review_col_names[1:]
+        return pd.DataFrame(values, index=indices, columns=columns)
 
     def get_front_demo_data(self, a_dict, t_dict, pid):
         """
@@ -160,13 +185,8 @@ class ItemDiffusion:
         data.index = t_list
         return data
 
-    def increasement(self, x):  # 非累积采纳数量
+def increase(x):  # 非累积采纳数量
         return [(x[i] - x[i - 1]) if i >= 1 else x[0] for i in range(len(x))]
-
-
-class ItemReview:
-    pass
-
 
 if __name__ == "__main__":
     client = MongoClient("127.0.0.1", 27017)
@@ -177,11 +197,7 @@ if __name__ == "__main__":
     f_project = db.failure_projects
     front_page = db.front_page
 
-    diffu_col_names = ["星期", "关注数", "支持者数", "点赞数", "完成百分比", "筹集金额"]
     proj = s_project.find_one({'项目动态信息.0.爬取时间': {'$gte': datetime.datetime(2019, 1, 1),
                                                  '$lte': datetime.datetime(2019, 1, 10)}})
-    proj_diffu_data = ItemDiffusion(
-        proj=proj, diffu_col_names=diffu_col_names, front_page=front_page)
+    proj_data = ProjData( proj=proj, front_page=front_page)
 
-    review_col_names = ["parentId", "topicId",
-                        "topicConten", "createTime", "nicknameShow", "replys"]
