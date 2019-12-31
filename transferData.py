@@ -35,7 +35,7 @@ class ProjData:
             self.category = self.proj["所属类别"]
             self.review = self.proj['评论']
             self.num_review = self.proj['评论']['总评论数']
-            
+
             self.review_df = self.get_review_data()  # 评论数据
             self.pure_diffu_df = self.get_pure_diffu()  # 未处理的扩散数据
             self.front_df = self.get_front_position()  # 首页数据
@@ -59,10 +59,11 @@ class ProjData:
                     indices.append(raw_review[t_id][key])
                 else:
                     value.append(raw_review[t_id][key])
-                
+
             values.append(value)
         columns = self.review_col_names[1:]
-        return pd.DataFrame(values, index=indices, columns=columns)
+        indices = [datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S") for x in indices]
+        return pd.DataFrame(values, index=indices, columns=columns).sort_index()
 
     def get_front_demo_data(self, a_dict, t_dict, pid):
         """
@@ -144,9 +145,10 @@ class ProjData:
 
     def merge_diffu_position(self):
         """
-        合并扩散数据和首页版面呈现时间数据
+        合并扩散数据、首页版面呈现时间数据和评论数量数据
         """
-        new_colNames = list(self.pure_diffu_df.columns) + \
+        review_index = self.review_df.index
+        new_colNames = list(self.pure_diffu_df.columns) + ['评论数'] +\
             list(self.front_df.columns)
         new_index = self.pure_diffu_df.index
         new_values = []
@@ -154,7 +156,8 @@ class ProjData:
             for j, idx2 in enumerate(self.front_df.index):
                 if idx1 <= idx2:
                     new_values.append(
-                        list(self.pure_diffu_df.iloc[i].values) + list(self.front_df.iloc[j].values))
+                        list(self.pure_diffu_df.iloc[i].values) + \
+                            [np.sum(idx1 > review_index)] + list(self.front_df.iloc[j].values))
                     break
             else:
                 print(i, idx1)
@@ -185,6 +188,31 @@ class ProjData:
         data.index = t_list
         return data
 
+
+class IterProj(object):
+    def __init__(self, pids, projects, front_page):
+        self.index = 0
+        self.pids = pids
+        self.projects = projects
+        self.front_page = front_page
+
+    def __repr__(self):
+        return '<class: ProjData, index:%d, projectId:%s>' % (self.index, self.pids[self.index])
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.index < len(self.pids):
+            proj = self.projects.find_one({'_id': self.pids[self.index]})
+            value = ProjData(proj=proj, front_page=self.front_page)
+            self.index += 1
+
+        else:
+            raise StopIteration
+        return value
+
+
 def increase(x):  # 非累积采纳数量
         return [(x[i] - x[i - 1]) if i >= 1 else x[0] for i in range(len(x))]
 
@@ -197,7 +225,11 @@ if __name__ == "__main__":
     f_project = db.failure_projects
     front_page = db.front_page
 
-    proj = s_project.find_one({'项目动态信息.0.爬取时间': {'$gte': datetime.datetime(2019, 1, 1),
-                                                 '$lte': datetime.datetime(2019, 1, 10)}})
-    proj_data = ProjData( proj=proj, front_page=front_page)
+    pids = [x['_id'] for x in s_project.find({'项目动态信息.0.爬取时间': {'$gte': datetime.datetime(2019, 1, 1),
+                                                 '$lte': datetime.datetime(2019, 4, 10)}},
+                              projection={'_id':1})]
+    projs = IterProj(pids, s_project, front_page)
+
+    # proj_data = ProjData( proj=proj, front_page=front_page)
+
 
