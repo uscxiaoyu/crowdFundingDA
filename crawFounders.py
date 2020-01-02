@@ -13,7 +13,7 @@ import random
 ssl._create_default_https_context = ssl._create_unverified_context  # 全局取消网页安全验证
 
 
-class crawfounders:
+class Crawfounders:
     client = MongoClient('localhost', 27017)
     db = client.moniter_crowdfunding
     def __init__(self):
@@ -122,5 +122,5 @@ class crawfounders:
                 break
             
 if __name__ == '__main__':
-    craw = crawfounders()
+    craw = Crawfounders()
     craw.main()
