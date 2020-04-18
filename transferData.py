@@ -214,7 +214,7 @@ class IterProj(object):
 
 
 def increase(x):  # 非累积采纳数量
-        return [(x[i] - x[i - 1]) if i >= 1 else x[0] for i in range(len(x))]
+    return [(x[i] - x[i - 1]) if i >= 1 else x[0] for i in range(len(x))]
 
 if __name__ == "__main__":
     client = MongoClient("127.0.0.1", 27017)
