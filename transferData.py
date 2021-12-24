@@ -221,7 +221,7 @@ if __name__ == "__main__":
     db = client.moniter_crowdfunding
     # db.authenticate(name="craw", password="craw")
     project = db.projects
-    s_project = db.sucess_projects
+    s_project = db.success_projects
     f_project = db.failure_projects
     front_page = db.front_page
 
