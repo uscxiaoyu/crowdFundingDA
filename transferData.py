@@ -22,28 +22,36 @@ class ProjData:
         self.front_page = front_page
         self.diffu_col_names = diffu_col_names
         self.review_col_names = review_col_names
-        try:
-            self.id = self.proj["_id"]
-            self.name = self.proj["项目名称"]
-            self.state = self.proj["状态"]
-            self.duration = self.proj["众筹期限"]
-            self.aim_fund = self.proj["目标金额"]
-            self.final_fund = self.proj["项目动态信息"][-1]["筹集金额"]
-            self.company_name = self.proj["公司名称"]
-            self.company_phone = self.proj["公司电话"]
-            self.link = self.proj["发起人链接"]
-            self.category = self.proj["所属类别"]
-            self.review = self.proj['评论']
-            self.num_review = self.proj['评论']['总评论数']
+        self.id = self.proj.get("_id")
+        self.name = self.proj.get("项目名称")
+        self.state = self.proj.get("状态")
+        self.duration = self.proj.get("众筹期限")
+        self.aim_fund = self.proj.get("目标金额")
+        self.final_fund = self.proj["项目动态信息"][-1].get("筹集金额")
+        self.company_name = self.proj.get("公司名称")
+        self.company_phone = self.proj.get("公号电话")
+        self.link = self.proj.get("发起人链接")
+        self.category = self.proj.get("所属类别")
+        self.review = self.proj.get("评论")
+        self.num_review = self.review.get('总评论数', 0)
 
-            self.review_df = self.get_review_data()  # 评论数据
-            self.pure_diffu_df = self.get_pure_diffu()  # 未处理的扩散数据
-            self.front_df = self.get_front_position()  # 首页数据
-            self.diffu_df = self.merge_diffu_position()
-            self.diffu_day_df = self.to_diffu_day_df()  # 每天最晚时间点的扩散数据
-            self.cum_diffu_df = self.prepare_data()  # 索引为相对众筹开始时间点的间隔
-        except Exception as e:
-            print(e)
+        self.review_df = self.get_review_data()  # 评论数据
+        self.pure_diffu_df = self.get_pure_diffu()  # 未处理的扩散数据
+        self.front_df = self.get_front_position()  # 首页数据
+        self.diffu_df = self.merge_diffu_position()
+        self.diffu_day_df = self.to_diffu_day_df()  # 每天最晚时间点的扩散数据
+        self.cum_diffu_df = self.prepare_data()  # 索引为相对众筹开始时间点的间隔
+        self.df = self.cum_diffu_df.assign(
+                                id=self.id, 
+                                name=self.name,
+                                final_state=self.state,
+                                duration=self.duration,
+                                aim_fund=self.aim_fund,
+                                final_fund=self.final_fund,
+                                company_name=self.company_name,
+                                company_phone=self.company_phone,
+                                link=self.link,
+                                category=self.category)
 
     def get_review_data(self):
         '''
@@ -197,7 +205,7 @@ class IterProj(object):
         self.front_page = front_page
 
     def __repr__(self):
-        return '<class: ProjData, index:%d, projectId:%s>' % (self.index, self.pids[self.index])
+        return "<class: iterateProject, nextProjId:{1}, index:{0}, numRemains:{2}".format(self.index, self.pids[self.index], len(pids)-self.index)
 
     def __iter__(self):
         return self
@@ -211,6 +219,26 @@ class IterProj(object):
         else:
             raise StopIteration
         return value
+    
+def build_df(pids, projects, front_page):
+    projs = IterProj(pids, projects, front_page)
+    for proj in projs:
+        num_focus = proj.df["关注数"].diff()
+        num_support = proj.df["支持者数"].diff()
+        num_zan = proj.df["点赞数"].diff()
+        num_percent = proj.df["完成百分比"].diff()
+        num_fund = proj.df["筹集金额"].diff()
+        num_reviews = proj.df["评论数"].diff()
+        df = proj.df.assign(
+            dep_focus = num_focus,
+            dep_support = num_support,
+            dep_zan = num_zan,
+            dep_percent = num_percent,
+            dep_fund = num_fund,
+            dep_reviews = num_reviews
+        )
+        
+    return df
 
 
 def increase(x):  # 非累积采纳数量
@@ -219,7 +247,6 @@ def increase(x):  # 非累积采纳数量
 if __name__ == "__main__":
     client = MongoClient("127.0.0.1", 27017)
     db = client.moniter_crowdfunding
-    # db.authenticate(name="craw", password="craw")
     project = db.projects
     s_project = db.success_projects
     f_project = db.failure_projects
@@ -230,6 +257,7 @@ if __name__ == "__main__":
                               projection={'_id':1})]
     projs = IterProj(pids, s_project, front_page)
 
-    # proj_data = ProjData( proj=proj, front_page=front_page)
+    df = next(projs).df
+    # proj_data = ProjData(proj=proj, front_page=front_page)
 
 
